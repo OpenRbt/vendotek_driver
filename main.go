@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	tcpTransport, err := dal.NewTCPTransport("READ IP ADDRESS FROM FILE", "PUT PORT FROM THE DOC")
+	tcpTransport, err := dal.NewTCPTransport("192.168.1.51", "62801")
 	if err != nil {
 		// return an err code here
 	}
