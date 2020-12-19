@@ -16,8 +16,8 @@ func NewApplication(newDevice CardReader) Application {
 }
 
 // RequestMoney requests the money
-func (a *App) RequestMoney(currencyCode, mainAmount, decimalAmount int, timeout time.Duration) error {
+func (a *App) RequestMoney(currencyCode, decimalAmount int, timeout time.Duration) error {
 	// TODO consider timeout
-	err := a.Device.RequestMoney(currencyCode, mainAmount, decimalAmount)
+	err := a.Device.RequestMoney(currencyCode, decimalAmount)
 	return err
 }

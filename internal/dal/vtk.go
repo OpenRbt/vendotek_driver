@@ -16,7 +16,7 @@ func NewVTK(newTransport VTKTransport) app.CardReader {
 }
 
 // RequestMoney is just to implement CardReader interface. It requests the money
-func (v *VTK) RequestMoney(currencyCode, mainAmount, decimalAmount int) error {
+func (v *VTK) RequestMoney(currencyCode, decimalAmount int) error {
 	// TODO Put Reads and Writes accodrdingly to the VTK protocol
 	// v.Transport.WriteBytes() - something like that
 	return nil
