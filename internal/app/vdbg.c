@@ -602,7 +602,47 @@ msg_deserialize(msg_t *msg, msg_stream_t *stream, int printout)
 void
 show_help(void)
 {
-
+    char *text[] = {
+        "",
+        "Network commands, server mode: ",
+        "    net listen 0.0.0.0 1234",
+        "       start to listen on port 1234, from all IPs",
+        "    net drop",
+        "       drop remote connection, if exist, and continue to listen for new one",
+        "    net down",
+        "       drop remote connection, if exist, stop to listen",
+        "    net connect 127.0.0.1 1234",
+        "       connect to 127.0.0.1, on port 1234",
+        "    net down",
+        "       do disconnect",
+        "    net stat",
+        "       show current net state",
+        "",
+        "Message commands:",
+        "    msg reset [POS | VMC]",
+        "       reset / initialize Upload message structure",
+        "    msg addstr 1 IDL",
+        "       add new field to Upload message, with code 0x01 and value = \"IDL\"",
+        "    msg print",
+        "       show Upload message in human readable form",
+        "    msg printhex",
+        "       show Upload message in hex form",
+        "    msg sent",
+        "       sent message over TCP, if connected; message structure will be reset then",
+        "",
+        "Other commands:",
+        "    macro sample0.macro",
+        "       load commands from \"sample0.macro\" file and execute them ",
+        "       as if they were read from terminal ",
+        "    help",
+        "       show this help",
+        "    quit",
+        "       quit gracefully",
+        "",  NULL
+    };
+    for (int i = 0; text[i]; i++) {
+        printi("%s", text[i]);
+    }
 }
 
 typedef struct state_s {
