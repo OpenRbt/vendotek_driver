@@ -627,8 +627,8 @@ show_help(void)
         "       show Upload message in human readable form",
         "    msg printhex",
         "       show Upload message in hex form",
-        "    msg sent",
-        "       sent message over TCP, if connected; message structure will be reset then",
+        "    msg send",
+        "       send message over TCP, if connected; message structure will be reset then",
         "",
         "Other commands:",
         "    macro sample0.macro",
@@ -742,9 +742,9 @@ user_action_ctrl(state_t *state, struct pollfd *pollfd, char *action)
 
         }
 
-        if (args[1] && (strcasecmp(args[1], "sent") == 0)) {
+        if (args[1] && (strcasecmp(args[1], "send") == 0)) {
             if (! NSTATE_IS_ESTABLISHED(state->network.state)) {
-                printe("Message can be sent in case of %s or %s network state",
+                printe("Message can be send in case of %s or %s network state",
                         nstate_stringify(NSTATE_ACCEPTED), nstate_stringify(NSTATE_CONNECTED));
                 return -1;
             }
