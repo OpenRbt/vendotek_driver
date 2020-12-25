@@ -1,2 +1,2 @@
 all:
-	gcc vdbg.c -o vendotek-dbg
+	gcc vdbg.c -Wno-format -o vendotek-dbg

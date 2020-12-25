@@ -25,11 +25,10 @@ void __attribute__((format(printf, 2, 3)))
 print(int flags, const char *format, ...)
 {
     char buffer[4096];
-    int  bufflen;
 
     va_list vlist;
     va_start(vlist, format);
-    bufflen = vsnprintf(buffer, sizeof(buffer), format, vlist);
+    vsnprintf(buffer, sizeof(buffer), format, vlist);
     va_end(vlist);
 
     FILE *outfile = ((flags & PRINT_PRIMASK) <= LOG_ERR) ? stderr : stdout;
