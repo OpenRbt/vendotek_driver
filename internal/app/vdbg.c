@@ -704,9 +704,9 @@ user_action_ctrl(state_t *state, struct pollfd *pollfd, char *action)
         if (args[1] && (strcasecmp(args[1], "reset") == 0)) {
             uint16_t protocol = VTK_BASE_FROM_STATE(state->network.state);
             if (args[2]) {
-                if (strcasecmp(args[2], "VMC")) {
+                if (strcasecmp(args[2], "VMC") == 0) {
                     protocol = VTK_BASE_VMC;
-                } else if (strcasecmp(args[2], "POS")) {
+                } else if (strcasecmp(args[2], "POS") == 0) {
                     protocol = VTK_BASE_POS;
                 } else {
                     printe(errmsg);
