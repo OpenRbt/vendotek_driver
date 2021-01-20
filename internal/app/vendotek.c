@@ -7,7 +7,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <syslog.h>
 #include <unistd.h>
 
 #include "vendotek.h"
@@ -15,8 +14,18 @@
 /*
  * Logging
  */
-static void
-vtk_log_dflt(int flags, const char *format, ...)
+void vtk_logline_default(int flags, const char *logline)
+{
+    FILE *outfile = ((flags & VTK_LOG_PRIMASK) <= LOG_ERR) ? stderr : stdout;
+    char *outform = (flags & VTK_LOG_NOEOL) ? "%s" : "%s\n";
+
+    fprintf(outfile, outform, logline);
+    fflush(outfile);
+}
+
+static vtk_logline_fn vtk_logline = vtk_logline_default;
+
+void vtk_log(int flags, const char *format, ...)
 {
     char buffer[4096];
 
@@ -25,18 +34,13 @@ vtk_log_dflt(int flags, const char *format, ...)
     vsnprintf(buffer, sizeof(buffer), format, vlist);
     va_end(vlist);
 
-    FILE *outfile = ((flags & VTK_LOG_PRIMASK) <= LOG_ERR) ? stderr : stdout;
-    char *outform = (flags & VTK_LOG_NOEOL) ? "%s" : "%s\n";
-
-    fprintf(outfile, outform, buffer);
-    fflush(outfile);
+    vtk_logline(flags, buffer);
 }
-#define loge(format, ...) vtk_log_dflt(LOG_ERR, format, ##__VA_ARGS__)
-#define logw(format, ...) vtk_log_dflt(LOG_WARNING, format, ##__VA_ARGS__)
-#define logn(format, ...) vtk_log_dflt(LOG_NOTICE, format, ##__VA_ARGS__)
-#define logi(format, ...) vtk_log_dflt(LOG_INFO, format, ##__VA_ARGS__)
-#define logd(format, ...) vtk_log_dflt(LOG_DEBUG, format, ##__VA_ARGS__)
-#define logp(format, ...) vtk_log_dflt(LOG_INFO | VTK_LOG_NOEOL, format, ##__VA_ARGS__)
+
+void vtk_logline_set(vtk_logline_fn logline)
+{
+    vtk_logline = logline ? logline : vtk_logline_default;
+}
 
 /*
  * Main State
@@ -55,7 +59,7 @@ struct vtk_s {
     vtk_stream_t stream_down;
 };
 
-int vtk_init(vtk_t **vtk, vtk_log_fn *log_fn)
+int vtk_init(vtk_t **vtk)
 {
     *vtk  = malloc(sizeof(vtk_t));
     **vtk = (vtk_t) {
@@ -85,22 +89,9 @@ void vtk_free(vtk_t *vtk){
     free(vtk);
 }
 
-void vtk_log_set(vtk_t  *vtk, vtk_log_fn *log_fn)
-{
-
-}
-
 /*
  * Messaging
  */
-#define VTK_BASE_VMC                0x96FB
-#define VTK_BASE_POS                0x97FB
-#define VTK_BASE_FROM_STATE(state) ((VTK_NET_IS_ACCEPTED(state) || VTK_NET_IS_LISTEN(state)) ? VTK_BASE_POS : VTK_BASE_VMC)
-
-#define VTK_MSG_MAXLEN              0xFFFF
-#define VTK_MSG_VARLEN(x)          (x <= 127 ? 1 : (x <= 255 ? 2 : 3))
-#define VTK_MSG_MODADD(mod)        ((mod == VTK_MSG_ADDSTR) || (mod == VTK_MSG_ADDBIN) || (mod == VTK_MSG_ADDHEX) || (mod == VTK_MSG_ADDFILE))
-
 typedef struct msg_arg_s {
     uint16_t   id;
     uint16_t   len;
@@ -160,7 +151,13 @@ vtk_msgid_stringify(uint16_t id)
 int vtk_msg_init(vtk_msg_t **msg, vtk_t *vtk)
 {
     *msg  = malloc(sizeof(vtk_msg_t));
-    **msg = (vtk_msg_t) { .vtk = vtk };
+    **msg = (vtk_msg_t) {
+        .vtk = vtk,
+        .header = {
+            .proto = VTK_BASE_FROM_STATE(vtk->net_state),
+            .len   = sizeof((*msg)->header.proto)
+            }
+        };
     return 0;
 }
 
@@ -234,7 +231,7 @@ int vtk_msg_print(vtk_msg_t *msg)
 {
     for (int iarg = 0; iarg < msg->args_cnt; iarg++) {
         msg_arg_t *arg = &msg->args[iarg];
-        logp("  % 2d: 0x%x  %s  => ", iarg, arg->id, vtk_msgid_stringify(arg->id));
+        vtk_logp("  % 2d: 0x%x  %s  => ", iarg, arg->id, vtk_msgid_stringify(arg->id));
 
         int hexout = 0;
         for (int i = 0; i < arg->len; i++) {
@@ -245,11 +242,11 @@ int vtk_msg_print(vtk_msg_t *msg)
         }
         if (hexout) {
             for (int i = 0; i < arg->len; i++) {
-                logp("%0x ", (uint8_t)arg->val[i]);
+                vtk_logp("%0x ", (uint8_t)arg->val[i]);
             }
-            logi("");
+            vtk_logi("");
         } else {
-            logi("%s", arg->val);
+            vtk_logi("%s", arg->val);
         }
     }
     return 0;
@@ -270,7 +267,7 @@ vtk_stream_write(vtk_stream_t *stream, uint16_t len, void *data, int verbose)
     for (int i = 0; i < len; i++) {
         stream->data[stream->len + i] = cdata[i];
         if (verbose) {
-            logp("%02X", (uint8_t)cdata[i]);
+            vtk_logp("%02X", (uint8_t)cdata[i]);
         }
     }
     stream->len += len;
@@ -287,7 +284,7 @@ vtk_stream_read(vtk_stream_t *stream, uint16_t len, void *data, int verbose)
     for (int i = 0; i < len; i++) {
         cdata[i] = stream->data[stream->offset + i];
         if (verbose) {
-            logp("%02X", (uint8_t)cdata[i]);
+            vtk_logp("%02X", (uint8_t)cdata[i]);
         }
     }
     stream->offset += len;
@@ -342,7 +339,7 @@ int vtk_msg_serialize(vtk_msg_t *msg, vtk_stream_t *stream, int verbose)
     vtk_stream_write(stream, sizeof(swap.len), &swap.len, verbose);
     vtk_stream_write(stream, sizeof(swap.proto), &swap.proto, verbose);
     if (verbose) {
-        logp(" ");
+        vtk_logp(" ");
     }
 
     for (int iarg = 0; iarg < msg->args_cnt; iarg++) {
@@ -351,11 +348,11 @@ int vtk_msg_serialize(vtk_msg_t *msg, vtk_stream_t *stream, int verbose)
         vtk_varint_serialize(stream, arg->len, verbose);
         vtk_stream_write(stream, arg->len, arg->val, verbose);
         if (verbose) {
-            logp(" ");
+            vtk_logp(" ");
         }
     }
     if (verbose) {
-        logi("");
+        vtk_logi("");
     }
     return 0;
 }
@@ -372,10 +369,9 @@ int vtk_msg_deserialize(vtk_msg_t *msg, vtk_stream_t *stream, int verbose)
     msg->header.len   = bswap_16(msg->header.len);
     msg->header.proto = bswap_16(msg->header.proto);
     if (verbose) {
-        logp(" ");
+        vtk_logp(" ");
     }
     for (int iarg = 0; stream->offset < stream->len; iarg++) {
-        /* todo: need to be improved */
         msg_arg_t arg = {0};
         vtk_varint_deserialize(stream, &arg.id, verbose);
         vtk_varint_deserialize(stream, &arg.len, verbose);
@@ -383,16 +379,16 @@ int vtk_msg_deserialize(vtk_msg_t *msg, vtk_stream_t *stream, int verbose)
 
         for (int i = 0; i < arg.len; i++) {
             if (verbose) {
-                logp("%02X", (uint8_t)stream->data[stream->offset]);
+                vtk_logp("%02X", (uint8_t)stream->data[stream->offset]);
             }
             stream->offset++;
         }
         if (verbose) {
-            logp(" ");
+            vtk_logp(" ");
         }
     }
     if (verbose) {
-        logi("");
+        vtk_logi("");
     }
     return 0;
 }
@@ -400,8 +396,7 @@ int vtk_msg_deserialize(vtk_msg_t *msg, vtk_stream_t *stream, int verbose)
 /*
  * Network State
  */
-static char *
-vtk_net_stringify(vtk_net_t vtk_net)
+char *vtk_net_stringify(vtk_net_t vtk_net)
 {
     switch(vtk_net) {
         case VTK_NET_DOWN:      return "DOWN";
@@ -422,8 +417,8 @@ int vtk_net_set(vtk_t *vtk, vtk_net_t net_to, char *addr, char *port)
 
         lsock->fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
         if (lsock->fd < 0) {
-            loge("%s -> %s: %s", vtk_net_stringify(vtk->net_state), vtk_net_stringify(net_to),
-                 "Can't create listen socket");
+            vtk_loge("%s -> %s: %s", vtk_net_stringify(vtk->net_state), vtk_net_stringify(net_to),
+                     "Can't create listen socket");
             return -1;
         }
         int sockoption = 1;
@@ -432,28 +427,28 @@ int vtk_net_set(vtk_t *vtk, vtk_net_t net_to, char *addr, char *port)
         lsock->addr.sin_family = AF_INET;
         lsock->addr.sin_port   = htons(atoi(port));
         if (inet_aton(addr, &lsock->addr.sin_addr) == 0) {
-            loge("%s -> %s: %s %s", vtk_net_stringify(vtk->net_state), vtk_net_stringify(net_to),
-                 "Bad listen addr: ", addr);
+            vtk_loge("%s -> %s: %s %s", vtk_net_stringify(vtk->net_state), vtk_net_stringify(net_to),
+                     "Bad listen addr: ", addr);
             close(lsock->fd);
             lsock->fd = -1;
             return -1;
         }
         if (bind(lsock->fd, (struct sockaddr *)&lsock->addr, sizeof(lsock->addr)) < 0) {
-            loge("%s -> %s: %s %s", vtk_net_stringify(vtk->net_state), vtk_net_stringify(net_to),
-                 "Listen socket binding error: ", strerror(errno));
+            vtk_loge("%s -> %s: %s %s", vtk_net_stringify(vtk->net_state), vtk_net_stringify(net_to),
+                     "Listen socket binding error: ", strerror(errno));
             close(lsock->fd);
             lsock->fd = -1;
             return -1;
         }
         if (listen(lsock->fd, INT32_MAX) < 0) {
-            loge("%s -> %s: %s %s", vtk_net_stringify(vtk->net_state), vtk_net_stringify(net_to),
-                 "Listen socket error: ", strerror(errno));
+            vtk_loge("%s -> %s: %s %s", vtk_net_stringify(vtk->net_state), vtk_net_stringify(net_to),
+                     "Listen socket error: ", strerror(errno));
             close(lsock->fd);
             lsock->fd = -1;
             return -1;
         }
         vtk->net_state = net_to;
-        logi("Start to listen on %s:%s", addr, port);
+        vtk_logi("Start to listen on %s:%s", addr, port);
         return 0;
     }
 
@@ -467,15 +462,15 @@ int vtk_net_set(vtk_t *vtk, vtk_net_t net_to, char *addr, char *port)
 
         asock->fd = accept(lsock->fd, (struct sockaddr *)&asock->addr, &asize);
         if (asock->fd < 0) {
-            loge("%s -> %s: %s %s", vtk_net_stringify(vtk->net_state), vtk_net_stringify(net_to),
-                 "Can't accept incoming connection: ", strerror(errno));
+            vtk_loge("%s -> %s: %s %s", vtk_net_stringify(vtk->net_state), vtk_net_stringify(net_to),
+                     "Can't accept incoming connection: ", strerror(errno));
             return -1;
         }
         fcntl(asock->fd, F_SETFL, O_NONBLOCK);
 
         vtk->net_state = net_to;
-        logi("Client connected from %s:%u",
-              inet_ntoa(asock->addr.sin_addr), ntohs(asock->addr.sin_port));
+        vtk_logi("Client connected from %s:%u",
+                  inet_ntoa(asock->addr.sin_addr), ntohs(asock->addr.sin_port));
         return 0;
     }
 
@@ -490,8 +485,8 @@ int vtk_net_set(vtk_t *vtk, vtk_net_t net_to, char *addr, char *port)
         memset(&asock->addr, 0, sizeof(asock->addr));
 
         vtk->net_state = net_to;
-        logi("Client connected was closed. Continue listen on %s:%u",
-              inet_ntoa(lsock->addr.sin_addr), ntohs(lsock->addr.sin_port));
+        vtk_logi("Client connected was closed. Continue listen on %s:%u",
+                  inet_ntoa(lsock->addr.sin_addr), ntohs(lsock->addr.sin_port));
         return 0;
     }
 
@@ -510,7 +505,7 @@ int vtk_net_set(vtk_t *vtk, vtk_net_t net_to, char *addr, char *port)
         memset(&lsock->addr, 0, sizeof(lsock->addr));
 
         vtk->net_state = net_to;
-        logi("Network state is DOWN");
+        vtk_logi("Network state is DOWN");
 
         return 0;
     }
@@ -526,7 +521,7 @@ int vtk_net_set(vtk_t *vtk, vtk_net_t net_to, char *addr, char *port)
         memset(&lsock->addr, 0, sizeof(lsock->addr));
 
         vtk->net_state = net_to;
-        logi("Network state is DOWN");
+        vtk_logi("Network state is DOWN");
         return 0;
     }
 
@@ -538,8 +533,8 @@ int vtk_net_set(vtk_t *vtk, vtk_net_t net_to, char *addr, char *port)
 
         csock->fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
         if (csock->fd < 0) {
-            loge("%s -> %s: %s", vtk_net_stringify(vtk->net_state), vtk_net_stringify(net_to),
-                 "Can't create connect socket");
+            vtk_loge("%s -> %s: %s", vtk_net_stringify(vtk->net_state), vtk_net_stringify(net_to),
+                     "Can't create connect socket");
             return -1;
         }
         int sockoption = 1;
@@ -548,16 +543,16 @@ int vtk_net_set(vtk_t *vtk, vtk_net_t net_to, char *addr, char *port)
         csock->addr.sin_family = AF_INET;
         csock->addr.sin_port   = htons(atoi(port));
         if (inet_aton(addr, &csock->addr.sin_addr) == 0) {
-            loge("%s -> %s: %s %s", vtk_net_stringify(vtk->net_state), vtk_net_stringify(net_to),
-                 "Bad connect addr: ", addr);
+            vtk_loge("%s -> %s: %s %s", vtk_net_stringify(vtk->net_state), vtk_net_stringify(net_to),
+                     "Bad connect addr: ", addr);
             close(csock->fd);
             csock->fd = -1;
             return -1;
         }
         if (connect(csock->fd, (struct sockaddr *)&csock->addr, sizeof(csock->addr)) < 0) {
-            loge("%s -> %s: Can't connect to %s:%u: %s",
-                  vtk_net_stringify(vtk->net_state), vtk_net_stringify(net_to),
-                  inet_ntoa(csock->addr.sin_addr), ntohs(csock->addr.sin_port), strerror(errno));
+            vtk_loge("%s -> %s: Can't connect to %s:%u: %s",
+                      vtk_net_stringify(vtk->net_state), vtk_net_stringify(net_to),
+                      inet_ntoa(csock->addr.sin_addr), ntohs(csock->addr.sin_port), strerror(errno));
             close(csock->fd);
             csock->fd = -1;
             return -1;
@@ -565,7 +560,7 @@ int vtk_net_set(vtk_t *vtk, vtk_net_t net_to, char *addr, char *port)
         fcntl(csock->fd, F_SETFL, O_NONBLOCK);
 
         vtk->net_state = net_to;
-        logi("Connected to %s:%u", inet_ntoa(csock->addr.sin_addr), ntohs(csock->addr.sin_port));
+        vtk_logi("Connected to %s:%u", inet_ntoa(csock->addr.sin_addr), ntohs(csock->addr.sin_port));
         return 0;
 
     }
@@ -581,16 +576,16 @@ int vtk_net_set(vtk_t *vtk, vtk_net_t net_to, char *addr, char *port)
         memset(&csock->addr, 0, sizeof(csock->addr));
 
         vtk->net_state = net_to;
-        logi("Network state is DOWN");
+        vtk_logi("Network state is DOWN");
         return 0;
 
     }
 
-    loge("%s -> %s: Unsupported network state transition", vtk_net_stringify(vtk->net_state), vtk_net_stringify(net_to));
+    vtk_loge("%s -> %s: Unsupported network state transition", vtk_net_stringify(vtk->net_state), vtk_net_stringify(net_to));
     return -1;
 }
 
-vtk_net_t vtk_net_get(vtk_t *vtk)
+vtk_net_t vtk_net_get_state(vtk_t *vtk)
 {
     return vtk->net_state;
 }
@@ -608,19 +603,39 @@ int vtk_net_get_socket(vtk_t *vtk)
 int vtk_net_send(vtk_t *vtk, vtk_msg_t *msg, int verbose)
 {
     if (! VTK_NET_IS_ESTABLISHED(vtk->net_state)) {
+        vtk_loge("Message can be send in case of %s or %s network state",
+                  vtk_net_stringify(VTK_NET_ACCEPTED),
+                  vtk_net_stringify(VTK_NET_CONNECTED));
         return -1;
     }
     int sock = vtk_net_get_socket(vtk);
-
     vtk_msg_serialize(msg, &vtk->stream_up, verbose);
-    ssize_t bwritten = write(sock, vtk->stream_up.data, vtk->stream_up.len);
 
-    return (bwritten == vtk->stream_up.len) ? vtk->stream_up.len : -1;
+    ssize_t bwritten = 0;
+    for (; bwritten < vtk->stream_up.len; ) {
+        ssize_t wresult = write(sock, &vtk->stream_up.data[bwritten], vtk->stream_up.len - bwritten);
+        if (wresult < 0) {
+            vtk_loge("socket error: %s", strerror(errno));
+            return -1;
+        } else if (wresult == 0) {
+            vtk_loge("unexpected socket behavior (buffer overflow?)");
+            return -1;
+        } else {
+            bwritten += wresult;
+        }
+    }
+    if (verbose) {
+        vtk_logi("%lu bytes were sent", bwritten);
+    }
+    return 0;
 }
 
 int vtk_net_recv(vtk_t *vtk, vtk_msg_t *msg, int *eof, int verbose)
 {
     if (! VTK_NET_IS_ESTABLISHED(vtk->net_state)) {
+        vtk_loge("Message can be send in case of %s or %s network state",
+                  vtk_net_stringify(VTK_NET_ACCEPTED),
+                  vtk_net_stringify(VTK_NET_CONNECTED));
         return -1;
     }
     int     sock = vtk_net_get_socket(vtk);
@@ -631,13 +646,15 @@ int vtk_net_recv(vtk_t *vtk, vtk_msg_t *msg, int *eof, int verbose)
     for (;;) {
         rcount = read(sock, buffer, sizeof(buffer));
         if (rcount > 0) {
-            vtk_stream_write(&vtk->stream_down, rcount, buffer, verbose);
+            vtk_stream_write(&vtk->stream_down, rcount, buffer, 0);
         } else {
             *eof = (rcount == 0);
             break;
         }
     }
     if (vtk->stream_down.len) {
+        vtk_logi("%lu bytes were read", vtk->stream_down.len);
+
         vtk_msg_mod(msg, VTK_MSG_RESET, VTK_BASE_FROM_STATE(vtk->net_state), 0, NULL);
 
         if (vtk_msg_deserialize(msg, &vtk->stream_down, verbose) >= 0) {
