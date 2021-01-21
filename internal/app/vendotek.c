@@ -112,8 +112,7 @@ struct vtk_msg_s {
     size_t     args_sz;
 };
 
-static char *
-vtk_msgid_stringify(uint16_t id)
+char * vtk_msg_stringify(uint16_t id)
 {
     struct msg_argid_s {
         uint16_t  id;
@@ -168,6 +167,33 @@ void vtk_msg_free(vtk_msg_t  *msg)
     }
     free(msg->args);
     free(msg);
+}
+
+int vtk_msg_find_param(vtk_msg_t *msg, uint16_t id, uint16_t *len, char **value)
+{
+    for (int iarg = 0; (iarg < msg->args_sz); iarg++) {
+        if (msg->args[iarg].id == id) {
+            if (len) {
+                *len   = msg->args[iarg].len;
+            }
+            if (value) {
+                *value = msg->args[iarg].val;
+            }
+            return 0;
+        }
+    }
+    return -1;
+}
+
+int vtk_msg_iter_param(vtk_msg_t *msg, uint16_t iparam, uint16_t *id, uint16_t *len, char **value)
+{
+    if (iparam >= msg->args_cnt) {
+        return -1;
+    }
+    *id    = msg->args[iparam].id;
+    *len   = msg->args[iparam].len;
+    *value = msg->args[iparam].val;
+    return 0;
 }
 
 int vtk_msg_mod(vtk_msg_t *msg, vtk_msgmod_t mod, uint16_t id, uint16_t len, char *value)
@@ -231,7 +257,7 @@ int vtk_msg_print(vtk_msg_t *msg)
 {
     for (int iarg = 0; iarg < msg->args_cnt; iarg++) {
         msg_arg_t *arg = &msg->args[iarg];
-        vtk_logp("  % 2d: 0x%x  %s  => ", iarg, arg->id, vtk_msgid_stringify(arg->id));
+        vtk_logp("  % 2d: 0x%x  %s  => ", iarg, arg->id, vtk_msg_stringify(arg->id));
 
         int hexout = 0;
         for (int i = 0; i < arg->len; i++) {
