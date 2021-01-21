@@ -51,7 +51,10 @@ int do_stage(stage_opts_t *opts, stage_req_t *req, stage_resp_t *resp)
         }
         vtk_msg_mod(opts->mreq, VTK_MSG_ADDSTR, req[i].id, 0, value);
     }
-    if (vtk_net_send(opts->vtk, opts->mreq, opts->verbose) < 0) {
+    if (opts->verbose) {
+        vtk_msg_print(opts->mreq);
+    }
+    if (vtk_net_send(opts->vtk, opts->mreq) < 0) {
         return -1;
     }
 
@@ -72,11 +75,13 @@ int do_stage(stage_opts_t *opts, stage_req_t *req, stage_resp_t *resp)
         return -1;
     }
     int fleof = 0;
-    if (vtk_net_recv(opts->vtk, opts->mresp, &fleof, opts->verbose) < 0) {
+    if (vtk_net_recv(opts->vtk, opts->mresp, &fleof) < 0) {
         vtk_loge("Expected event can't be received/validated");
         return -1;
     }
-
+    if (opts->verbose) {
+        vtk_msg_print(opts->mresp);
+    }
     for (int i = 0; resp[i].id; i++) {
         char    *valstr = NULL;
         ssize_t  valint = 0;
@@ -156,6 +161,8 @@ int do_payment(payment_opts_t *opts)
     /*
      * 1 stage, IDL
      */
+    vtk_logi("IDL stage");
+
     stage_opts_t stopts = {
         .vtk     = opts->vtk,
         .timeout = opts->timeout * 1000,
@@ -188,6 +195,8 @@ int do_payment(payment_opts_t *opts)
     /*
      * 2 stage, VRP
      */
+    vtk_logi("VRP stage");
+
     stopts.timeout = payment.timeout * 1000;
     payment.opnum++;
 
@@ -212,6 +221,8 @@ int do_payment(payment_opts_t *opts)
     /*
      * 3 stage, FIN
      */
+    vtk_logi("FIN stage");
+
     stopts.allow_eof = 1;
 
     stage_req_t fin_req[] = {
@@ -320,6 +331,7 @@ int main(int argc, char *argv[])
     /*
      * Initialize VTK & do payment
      */
+    vtk_logline_set(NULL, popts.verbose ? LOG_DEBUG : LOG_WARNING);
     vtk_init(&popts.vtk);
     vtk_net_set(popts.vtk, VTK_NET_CONNECTED, conn_host, conn_port);
 

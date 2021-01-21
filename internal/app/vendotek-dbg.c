@@ -143,13 +143,13 @@ int user_action_ctrl(state_t *state, char *action)
         }
 
         if (args[1] && (strcasecmp(args[1], "printhex") == 0)) {
-            return vtk_msg_serialize(state->msg_up, &state->msg_stream_up, 1);
+            return vtk_msg_serialize(state->msg_up, &state->msg_stream_up);
 
         }
 
         if (args[1] && (strcasecmp(args[1], "send") == 0)) {
 
-            if (vtk_net_send(state->vtk, state->msg_up, 1) < 0) {
+            if (vtk_net_send(state->vtk, state->msg_up) < 0) {
                 return -1;
             }
             vtk_msg_mod(state->msg_up, VTK_MSG_RESET, VTK_BASE_FROM_STATE(vtk_net_get_state(state->vtk)), 0, NULL);
@@ -202,7 +202,7 @@ int main_loop_run(state_t *state)
     spool[in_sock].events = POLLIN;
 
     for (;;) {
-        vtk_logp("command > ");
+        vtk_logio("command > ");
 
         spool[in_sock].fd = vtk_net_get_socket(state->vtk);
         nfds_t pollsize   = spool[in_sock].fd >= 0 ? 2 : 1;
@@ -256,7 +256,7 @@ int main_loop_run(state_t *state)
                  * check for incoming data
                  */
                 int fleof = 0;
-                int rcode = vtk_net_recv(state->vtk, state->msg_down, &fleof, 1);
+                int rcode = vtk_net_recv(state->vtk, state->msg_down, &fleof);
 
                 if (rcode >= 0) {
                     vtk_msg_print(state->msg_down);

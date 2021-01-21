@@ -22,11 +22,15 @@ void vtk_logline_default(int flags, const char *logline)
     fprintf(outfile, outform, logline);
     fflush(outfile);
 }
-
-static vtk_logline_fn vtk_logline = vtk_logline_default;
+static int            vtk_loglevel = LOG_DEBUG;
+static vtk_logline_fn vtk_logline  = vtk_logline_default;
 
 void vtk_log(int flags, const char *format, ...)
 {
+    if ((flags & VTK_LOG_PRIMASK) > vtk_loglevel) {
+        return;
+    }
+
     char buffer[4096];
 
     va_list vlist;
@@ -37,9 +41,10 @@ void vtk_log(int flags, const char *format, ...)
     vtk_logline(flags, buffer);
 }
 
-void vtk_logline_set(vtk_logline_fn logline)
+void vtk_logline_set(vtk_logline_fn logline, int loglevel)
 {
-    vtk_logline = logline ? logline : vtk_logline_default;
+    vtk_loglevel = loglevel;
+    vtk_logline  = logline ? logline : vtk_logline_default;
 }
 
 /*
@@ -257,7 +262,7 @@ int vtk_msg_print(vtk_msg_t *msg)
 {
     for (int iarg = 0; iarg < msg->args_cnt; iarg++) {
         msg_arg_t *arg = &msg->args[iarg];
-        vtk_logp("  % 2d: 0x%x  %s  => ", iarg, arg->id, vtk_msg_stringify(arg->id));
+        vtk_logio("  % 2d: 0x%x  %s  => ", iarg, arg->id, vtk_msg_stringify(arg->id));
 
         int hexout = 0;
         for (int i = 0; i < arg->len; i++) {
@@ -268,7 +273,7 @@ int vtk_msg_print(vtk_msg_t *msg)
         }
         if (hexout) {
             for (int i = 0; i < arg->len; i++) {
-                vtk_logp("%0x ", (uint8_t)arg->val[i]);
+                vtk_logio("%0x ", (uint8_t)arg->val[i]);
             }
             vtk_logi("");
         } else {
@@ -279,7 +284,7 @@ int vtk_msg_print(vtk_msg_t *msg)
 }
 
 static int
-vtk_stream_write(vtk_stream_t *stream, uint16_t len, void *data, int verbose)
+vtk_stream_write(vtk_stream_t *stream, uint16_t len, void *data, int logdump)
 {
     if (stream->len + len >= stream->size) {
         if (stream->len + len > stream->size * 2) {
@@ -292,8 +297,8 @@ vtk_stream_write(vtk_stream_t *stream, uint16_t len, void *data, int verbose)
     char *cdata = (char *)data;
     for (int i = 0; i < len; i++) {
         stream->data[stream->len + i] = cdata[i];
-        if (verbose) {
-            vtk_logp("%02X", (uint8_t)cdata[i]);
+        if (logdump) {
+            vtk_logdo("%02X", (uint8_t)cdata[i]);
         }
     }
     stream->len += len;
@@ -301,7 +306,7 @@ vtk_stream_write(vtk_stream_t *stream, uint16_t len, void *data, int verbose)
 }
 
 static int
-vtk_stream_read(vtk_stream_t *stream, uint16_t len, void *data, int verbose)
+vtk_stream_read(vtk_stream_t *stream, uint16_t len, void *data, int logdump)
 {
     if (stream->offset + len > stream->len) {
         return -1;
@@ -309,8 +314,8 @@ vtk_stream_read(vtk_stream_t *stream, uint16_t len, void *data, int verbose)
     char *cdata = (char *)data;
     for (int i = 0; i < len; i++) {
         cdata[i] = stream->data[stream->offset + i];
-        if (verbose) {
-            vtk_logp("%02X", (uint8_t)cdata[i]);
+        if (logdump) {
+            vtk_logdo("%02X", (uint8_t)cdata[i]);
         }
     }
     stream->offset += len;
@@ -318,7 +323,7 @@ vtk_stream_read(vtk_stream_t *stream, uint16_t len, void *data, int verbose)
 }
 
 static int
-vtk_varint_serialize(vtk_stream_t *stream, uint16_t value, int verbose)
+vtk_varint_serialize(vtk_stream_t *stream, uint16_t value)
 {
     uint8_t varint[3];
     if (value <= 127) {
@@ -331,23 +336,23 @@ vtk_varint_serialize(vtk_stream_t *stream, uint16_t value, int verbose)
         varint[1] = (uint8_t)(value >> 8);
         varint[2] = (uint8_t)(value & 255);
     }
-    return vtk_stream_write(stream, VTK_MSG_VARLEN(value), varint, verbose);
+    return vtk_stream_write(stream, VTK_MSG_VARLEN(value), varint, 1);
 }
 
 static int
-vtk_varint_deserialize(vtk_stream_t *stream, uint16_t *value, int verbose)
+vtk_varint_deserialize(vtk_stream_t *stream, uint16_t *value)
 {
     uint8_t varint[3];
-    vtk_stream_read(stream, 1, &varint[0], verbose);
+    vtk_stream_read(stream, 1, &varint[0], 1);
 
     if (varint[0] <= 127) {
         *value = varint[0];
     } else if ((varint[0] & 127) == 1) {
-        vtk_stream_read(stream, 1, &varint[1], verbose);
+        vtk_stream_read(stream, 1, &varint[1], 1);
         *value = varint[0];
     } else if ((varint[0] & 127) == 2) {
-        vtk_stream_read(stream, 1, &varint[1], verbose);
-        vtk_stream_read(stream, 1, &varint[2], verbose);
+        vtk_stream_read(stream, 1, &varint[1], 1);
+        vtk_stream_read(stream, 1, &varint[2], 1);
         *value = (varint[1] << 8) + varint[2];
     } else {
         return -1;
@@ -355,35 +360,29 @@ vtk_varint_deserialize(vtk_stream_t *stream, uint16_t *value, int verbose)
     return 0;
 }
 
-int vtk_msg_serialize(vtk_msg_t *msg, vtk_stream_t *stream, int verbose)
+int vtk_msg_serialize(vtk_msg_t *msg, vtk_stream_t *stream)
 {
     msg_hdr_t swap = {
         .len   = bswap_16(msg->header.len),
         .proto = bswap_16(msg->header.proto),
     };
     stream->offset = stream->len = 0;
-    vtk_stream_write(stream, sizeof(swap.len), &swap.len, verbose);
-    vtk_stream_write(stream, sizeof(swap.proto), &swap.proto, verbose);
-    if (verbose) {
-        vtk_logp(" ");
-    }
+    vtk_stream_write(stream, sizeof(swap.len), &swap.len, 1);
+    vtk_stream_write(stream, sizeof(swap.proto), &swap.proto, 1);
+    vtk_logio(" ");
 
     for (int iarg = 0; iarg < msg->args_cnt; iarg++) {
         msg_arg_t *arg = &msg->args[iarg];
-        vtk_varint_serialize(stream, arg->id, verbose);
-        vtk_varint_serialize(stream, arg->len, verbose);
-        vtk_stream_write(stream, arg->len, arg->val, verbose);
-        if (verbose) {
-            vtk_logp(" ");
-        }
+        vtk_varint_serialize(stream, arg->id);
+        vtk_varint_serialize(stream, arg->len);
+        vtk_stream_write(stream, arg->len, arg->val, 1);
+        vtk_logio(" ");
     }
-    if (verbose) {
-        vtk_logi("");
-    }
+    vtk_logi("");
     return 0;
 }
 
-int vtk_msg_deserialize(vtk_msg_t *msg, vtk_stream_t *stream, int verbose)
+int vtk_msg_deserialize(vtk_msg_t *msg, vtk_stream_t *stream)
 {
     stream->offset = 0;
 
@@ -391,31 +390,24 @@ int vtk_msg_deserialize(vtk_msg_t *msg, vtk_stream_t *stream, int verbose)
         return -1;
     }
     msg_hdr_t swap;
-    vtk_stream_read(stream, sizeof(swap), &swap, verbose);
+    vtk_stream_read(stream, sizeof(swap), &swap, 1);
     msg->header.len   = bswap_16(msg->header.len);
     msg->header.proto = bswap_16(msg->header.proto);
-    if (verbose) {
-        vtk_logp(" ");
-    }
+
+    vtk_logio(" ");
     for (int iarg = 0; stream->offset < stream->len; iarg++) {
         msg_arg_t arg = {0};
-        vtk_varint_deserialize(stream, &arg.id, verbose);
-        vtk_varint_deserialize(stream, &arg.len, verbose);
+        vtk_varint_deserialize(stream, &arg.id);
+        vtk_varint_deserialize(stream, &arg.len);
         vtk_msg_mod(msg, VTK_MSG_ADDBIN, arg.id, arg.len, &stream->data[stream->offset]);
 
         for (int i = 0; i < arg.len; i++) {
-            if (verbose) {
-                vtk_logp("%02X", (uint8_t)stream->data[stream->offset]);
-            }
+            vtk_logio("%02X", (uint8_t)stream->data[stream->offset]);
             stream->offset++;
         }
-        if (verbose) {
-            vtk_logp(" ");
-        }
+        vtk_logio(" ");
     }
-    if (verbose) {
-        vtk_logi("");
-    }
+    vtk_logi("");
     return 0;
 }
 
@@ -626,7 +618,7 @@ int vtk_net_get_socket(vtk_t *vtk)
     }
 }
 
-int vtk_net_send(vtk_t *vtk, vtk_msg_t *msg, int verbose)
+int vtk_net_send(vtk_t *vtk, vtk_msg_t *msg)
 {
     if (! VTK_NET_IS_ESTABLISHED(vtk->net_state)) {
         vtk_loge("Message can be send in case of %s or %s network state",
@@ -635,7 +627,7 @@ int vtk_net_send(vtk_t *vtk, vtk_msg_t *msg, int verbose)
         return -1;
     }
     int sock = vtk_net_get_socket(vtk);
-    vtk_msg_serialize(msg, &vtk->stream_up, verbose);
+    vtk_msg_serialize(msg, &vtk->stream_up);
 
     ssize_t bwritten = 0;
     for (; bwritten < vtk->stream_up.len; ) {
@@ -650,13 +642,11 @@ int vtk_net_send(vtk_t *vtk, vtk_msg_t *msg, int verbose)
             bwritten += wresult;
         }
     }
-    if (verbose) {
-        vtk_logi("%lu bytes were sent", bwritten);
-    }
+    vtk_logi("%lu bytes were sent", bwritten);
     return 0;
 }
 
-int vtk_net_recv(vtk_t *vtk, vtk_msg_t *msg, int *eof, int verbose)
+int vtk_net_recv(vtk_t *vtk, vtk_msg_t *msg, int *eof)
 {
     if (! VTK_NET_IS_ESTABLISHED(vtk->net_state)) {
         vtk_loge("Message can be send in case of %s or %s network state",
@@ -683,7 +673,7 @@ int vtk_net_recv(vtk_t *vtk, vtk_msg_t *msg, int *eof, int verbose)
 
         vtk_msg_mod(msg, VTK_MSG_RESET, VTK_BASE_FROM_STATE(vtk->net_state), 0, NULL);
 
-        if (vtk_msg_deserialize(msg, &vtk->stream_down, verbose) >= 0) {
+        if (vtk_msg_deserialize(msg, &vtk->stream_down) >= 0) {
             return vtk->stream_down.len;
         } else {
             return -1;

@@ -13,16 +13,18 @@ void  vtk_log(int flags, const char *format, ...);
 #define VTK_LOG_PRIMASK 0x07
 #define VTK_LOG_NOEOL   0x10
 
-#define vtk_loge(format, ...) vtk_log(LOG_ERR, format, ##__VA_ARGS__)
-#define vtk_logw(format, ...) vtk_log(LOG_WARNING, format, ##__VA_ARGS__)
-#define vtk_logn(format, ...) vtk_log(LOG_NOTICE, format, ##__VA_ARGS__)
-#define vtk_logi(format, ...) vtk_log(LOG_INFO, format, ##__VA_ARGS__)
-#define vtk_logd(format, ...) vtk_log(LOG_DEBUG, format, ##__VA_ARGS__)
-#define vtk_logp(format, ...) vtk_log(LOG_INFO | VTK_LOG_NOEOL, format, ##__VA_ARGS__)
+#define vtk_loge(format, ...)  vtk_log(LOG_ERR,     format, ##__VA_ARGS__)
+#define vtk_logw(format, ...)  vtk_log(LOG_WARNING, format, ##__VA_ARGS__)
+#define vtk_logn(format, ...)  vtk_log(LOG_NOTICE,  format, ##__VA_ARGS__)
+#define vtk_logi(format, ...)  vtk_log(LOG_INFO,    format, ##__VA_ARGS__)
+#define vtk_logd(format, ...)  vtk_log(LOG_DEBUG,   format, ##__VA_ARGS__)
+#define vtk_logno(format, ...) vtk_log(LOG_NOTICE | VTK_LOG_NOEOL, format, ##__VA_ARGS__)
+#define vtk_logio(format, ...) vtk_log(LOG_INFO   | VTK_LOG_NOEOL, format, ##__VA_ARGS__)
+#define vtk_logdo(format, ...) vtk_log(LOG_DEBUG  | VTK_LOG_NOEOL, format, ##__VA_ARGS__)
 
 typedef void  (*vtk_logline_fn)(int flags, const char *logline);
 
-void vtk_logline_set(vtk_logline_fn logline);
+void vtk_logline_set(vtk_logline_fn logline, int loglevel);
 
 /*
  * Main state structure
@@ -69,8 +71,8 @@ typedef struct vtk_stream_s {
     size_t     offset;
 } vtk_stream_t;
 
-int vtk_msg_serialize  (vtk_msg_t *msg, vtk_stream_t *stream, int verbose);
-int vtk_msg_deserialize(vtk_msg_t *msg, vtk_stream_t *stream, int verbose);
+int vtk_msg_serialize  (vtk_msg_t *msg, vtk_stream_t *stream/*, int verbose*/);
+int vtk_msg_deserialize(vtk_msg_t *msg, vtk_stream_t *stream/*, int verbose*/);
 
 /*
  * Network State
@@ -91,7 +93,7 @@ char     *vtk_net_stringify(vtk_net_t vtk_net);
 int       vtk_net_set(vtk_t *vtk, vtk_net_t net_to, char *addr, char *port);
 vtk_net_t vtk_net_get_state(vtk_t *vtk);
 int       vtk_net_get_socket(vtk_t *vtk);
-int       vtk_net_send(vtk_t *vtk, vtk_msg_t *msg, int verbose);
-int       vtk_net_recv(vtk_t *vtk, vtk_msg_t *msg, int *eof, int verbose);
+int       vtk_net_send(vtk_t *vtk, vtk_msg_t *msg);
+int       vtk_net_recv(vtk_t *vtk, vtk_msg_t *msg, int *eof);
 
 #endif
