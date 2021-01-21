@@ -166,9 +166,9 @@ int do_payment(payment_opts_t *opts)
 
     stage_req_t idl_req[] = {
         {.id = 0x1, .valstr = "IDL"             },
-        {.id = 0x8, .valint = &payment.evnum    },
+        {.id = 0x8, .valint =  payment.evname   ? &payment.evnum : NULL  },
         {.id = 0x7, .valstr =  payment.evname   },
-        {.id = 0x9, .valint = &payment.prodid   },
+        {.id = 0x9, .valint =  payment.prodname ? &payment.prodid : NULL },
         {.id = 0xf, .valstr =  payment.prodname },
         {.id = 0x4, .valint = &payment.price    },
         { 0 }
@@ -194,7 +194,7 @@ int do_payment(payment_opts_t *opts)
     stage_req_t vrp_req[] = {
         {.id = 0x1, .valstr = "VRP"             },
         {.id = 0x3, .valint = &payment.opnum    },
-        {.id = 0x9, .valint = &payment.prodid   },
+        {.id = 0x9, .valint =  payment.prodname ? &payment.prodid : NULL },
         {.id = 0xf, .valstr =  payment.prodname },
         {.id = 0x4, .valint = &payment.price    },
         { 0 }
@@ -217,7 +217,7 @@ int do_payment(payment_opts_t *opts)
     stage_req_t fin_req[] = {
         {.id = 0x1, .valstr = "FIN"             },
         {.id = 0x3, .valint = &payment.opnum    },
-        {.id = 0x9, .valint = &payment.prodid   },
+        {.id = 0x9, .valint =  payment.prodname ? &payment.prodid : NULL },
         {.id = 0x4, .valint = &payment.price    },
         { 0 }
     };
@@ -228,9 +228,6 @@ int do_payment(payment_opts_t *opts)
         { 0 }
     };
     if (do_stage(&stopts, fin_req, fin_resp) < 0) {
-        return -1;
-    }
-    if (payment.price_confirmed != payment.price) {
         return -1;
     }
 
@@ -324,7 +321,7 @@ int main(int argc, char *argv[])
      * Initialize VTK & do payment
      */
     vtk_init(&popts.vtk);
-    vtk_net_set(popts.vtk, VTK_NET_CONNECTED, "127.0.0.1", "1234");
+    vtk_net_set(popts.vtk, VTK_NET_CONNECTED, conn_host, conn_port);
 
     vtk_msg_init(&popts.mreq,  popts.vtk);
     vtk_msg_init(&popts.mresp, popts.vtk);
