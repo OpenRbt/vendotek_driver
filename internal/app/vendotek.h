@@ -56,8 +56,11 @@ typedef enum vtk_msgmod_s {
 #define VTK_MSG_VARLEN(x)          (x <= 127 ? 1 : (x <= 255 ? 2 : 3))
 #define VTK_MSG_MODADD(mod)        ((mod == VTK_MSG_ADDSTR) || (mod == VTK_MSG_ADDBIN) || (mod == VTK_MSG_ADDHEX) || (mod == VTK_MSG_ADDFILE))
 
-int vtk_msg_mod(vtk_msg_t *msg, vtk_msgmod_t mod, uint16_t id, uint16_t len, char *value);
-int vtk_msg_print(vtk_msg_t *msg);
+char *  vtk_msg_stringify(uint16_t id);
+int     vtk_msg_find_param(vtk_msg_t *msg, uint16_t id, uint16_t *len, char **value);
+int     vtk_msg_iter_param(vtk_msg_t *msg, uint16_t iparam, uint16_t *id, uint16_t *len, char **value);
+int     vtk_msg_mod  (vtk_msg_t *msg, vtk_msgmod_t mod, uint16_t id, uint16_t len, char *value);
+int     vtk_msg_print(vtk_msg_t *msg);
 
 typedef struct vtk_stream_s {
     char      *data;
@@ -66,7 +69,7 @@ typedef struct vtk_stream_s {
     size_t     offset;
 } vtk_stream_t;
 
-int vtk_msg_serialize(vtk_msg_t *msg, vtk_stream_t *stream, int verbose);
+int vtk_msg_serialize  (vtk_msg_t *msg, vtk_stream_t *stream, int verbose);
 int vtk_msg_deserialize(vtk_msg_t *msg, vtk_stream_t *stream, int verbose);
 
 /*
