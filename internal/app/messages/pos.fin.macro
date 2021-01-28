@@ -1,8 +1,0 @@
-#
-# Stage 2. FIN
-
-msg reset POS
-msg addstr 0x1  FIN
-msg addstr 0x3  6
-msg addstr 0x4  25000
-msg send

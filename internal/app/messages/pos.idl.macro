@@ -1,9 +1,0 @@
-#
-# Stage 1. IDL
-
-msg reset POS
-msg addstr 0x1  IDL
-msg addstr 0x3  5
-msg addstr 0x6  120
-msg addstr 0x8  7
-msg send
