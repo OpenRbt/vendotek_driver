@@ -1,0 +1,8 @@
+#
+# Stage 2. VRP
+
+msg reset POS
+msg addstr 0x1  VRP
+msg addstr 0x3  6
+msg addstr 0x4  25000
+msg send
