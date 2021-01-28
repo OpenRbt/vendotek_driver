@@ -251,7 +251,7 @@ void show_help(void) {
         "Available options are:",
         "  --host       mandatory       POS hostname IP",
         "  --port       mandatory       POS port number",
-        "  --price      mandatory       Price in minor currenct units",
+        "  --price      mandatory       Price in minor currency units (MCU)",
         "  --prodname   optional        Product Name",
         "  --prodid     optional        Product ID",
         "  --evname     optional        Event Name",
