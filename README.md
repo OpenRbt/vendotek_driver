@@ -32,32 +32,39 @@ There are several command line options for the client app:
     --host       mandatory       POS hostname IP
     --port       mandatory       POS port number
     --price      mandatory       Price in minor currency units (MCU)
+    --ping       optional        Connect, send IDL message, disconnect
     --prodname   optional        Product Name
     --prodid     optional        Product ID
     --evname     optional        Event Name
     --evnum      optional        Event Number
     --timeout    optional        Timeout in seconds, 60 by default
-    --verbose    optional        Switch to Verbose mode
+    --verbose    optional        Set verbosity level.
+                                 0 - silent, 4 - errs + warnings, 7 - most verbose
+                                 4 by default
+```
+Example 0. Ping with 3 seconds timeout
+```
+$ ./vendotek-cli --host 127.0.0.1 --port 1234 --ping --timeout 3
 ```
 
-Example 1. Do payment of 35000 MCU (350 Rubles)
+Example 1. Do payment of 25000 MCU (250 Rubles)
 ```
-$ ./vendotek-cli --host 192.168.1.51 --port 62801 --price 35000
-```
-
-Example 2. Do payment of 35000 MCU (350 Rubles), verbose mode
-```
-$ ./vendotek-cli --host 192.168.1.51 --port 62801 --price 35000 --verbose
+$ ./vendotek-cli --host 127.0.0.1 --port 1234 --price 25000
 ```
 
-Example 3. The same as in above. Add product name & product id
+Example 2. Do payment of 35000 MCU (350 Rubles), silent mode
 ```
-$ ./vendotek-cli --host 192.168.1.51 --port 62801 --price 35000 --prodname "CARWASH" --prodid 7 --verbose
+$ ./vendotek-cli --host 127.0.0.1 --port 1234 --price 25000 --verbose 0
 ```
 
-Example 4. The same as in above. Add POS event name and event number
+Example 3. Add product name & product id. Maximum verbosity
 ```
-$ ./vendotek-cli --host 192.168.1.51 --port 62801 --price 35000 --prodname "CARWASH" --prodid 7 --evname "CSAPP" --evnumber 10 --verbose
+$ ./vendotek-cli --host 127.0.0.1 --port 1234 --price 25000 --prodname "CARWASH" --prodid 7 --verbose 7
+```
+
+Example 4. Add POS event name and event number. Default verbosity
+```
+$ ./vendotek-cli --host 127.0.0.1 --port 1234 --price 25000 --prodname "CARWASH" --prodid 7 --evname "CSAPP" --evnumber 10
 ```
 
 __Note!__ VMC must check `vendotek-cli` return code. E.g:
@@ -65,8 +72,7 @@ __Note!__ VMC must check `vendotek-cli` return code. E.g:
 $ ./vendotek-cli
 $ echo $?
 ```
-Return code is equals zero for succeed payment, and non-zero if any error was occured (you will see text
-message on stderr stream in this case)
+Return code is equals zero for success operation - payment or ping, and non-zero if any error has occured
 
 #### Work with protocol debugger
 
@@ -80,7 +86,7 @@ For example, you can simulate POS terminal in case of client app payment transac
 - create listen connection
 - connect to debugger via `vendotek-cli`
 - when you see first `IDL` request from the client, execute macro command from `messages\pos.idl.macro`
-- do the same for `VRP` and `FIN` commands
+- do the same for `VRP`, then for `FIN`, and then for the second `IDL` messages
 - please make sure that amount of MCUs (0x4 field) in macro files should be the same as in your client request
 
 
