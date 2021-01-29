@@ -23,7 +23,7 @@ produced:
 #### Work with client app
 
 Only purpose for the client app is to do payment operation. This goal is achieved via hard-coded messages
-queue to Vendotek POS: `IDL (request/response)`, `VRP (request/pesponse)`, `FIN (request)/response`.
+queue to Vendotek POS: `IDL`, `VRP`, `FIN`, and `IDL` again, with request and response messages for each.
 Please take a look documentation provided to understand these operations.
 
 There are several command line options for the client app:
