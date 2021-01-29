@@ -57,12 +57,12 @@ Example 2. Do payment of 25000 MCU (250 Rubles), silent mode
 $ ./vendotek-cli --host 127.0.0.1 --port 1234 --price 25000 --verbose 0
 ```
 
-Example 3. Add product name & product id. Maximum verbosity
+Example 3. Payment with product name & product id. Maximum verbosity
 ```
 $ ./vendotek-cli --host 127.0.0.1 --port 1234 --price 25000 --prodname "CARWASH" --prodid 7 --verbose 7
 ```
 
-Example 4. Add POS event name and event number. Default verbosity
+Example 4. Payment with event name and event number. Default verbosity
 ```
 $ ./vendotek-cli --host 127.0.0.1 --port 1234 --price 25000 --prodname "CARWASH" --prodid 7 --evname "CSAPP" --evnumber 10
 ```
