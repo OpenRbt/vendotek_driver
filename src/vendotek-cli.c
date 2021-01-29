@@ -163,8 +163,6 @@ int do_payment(payment_opts_t *opts)
     /*
      * 1 stage, IDL 1
      */
-    vtk_logi("IDL stage");
-
     stage_opts_t stopts = {
         .vtk     = opts->vtk,
         .timeout = opts->timeout * 1000,
@@ -173,6 +171,8 @@ int do_payment(payment_opts_t *opts)
         .mresp   = opts->mresp
     };
     if (1) {
+        vtk_logi("IDL Init stage");
+
         stage_req_t idl1_req[] = {
             {.id = 0x1, .valstr = "IDL"             },
             {.id = 0x8, .valint =  payment.evname   ? &payment.evnum : NULL  },
@@ -195,9 +195,9 @@ int do_payment(payment_opts_t *opts)
     /*
      * 2 stage, VRP
      */
-    vtk_logi("VRP stage");
-
     if (rc_idl) {
+        vtk_logi("VRP stage");
+
         stopts.timeout = payment.timeout * 1000;
         payment.opnum++;
 
@@ -221,9 +221,9 @@ int do_payment(payment_opts_t *opts)
     /*
      * 3 stage, FIN
      */
-    vtk_logi("FIN stage");
-
     if (rc_vrp) {
+        vtk_logi("FIN stage");
+
         stopts.allow_eof = 1;
 
         stage_req_t fin_req[] = {
@@ -245,6 +245,8 @@ int do_payment(payment_opts_t *opts)
     /*
      * 4 stage, IDL 2, always
      */
+    vtk_logi("IDL Fini stage");
+
     stage_req_t idl2_req[] = {
         {.id = 0x1, .valstr = "IDL"             },
         { 0 }
@@ -293,7 +295,9 @@ void show_help(void) {
         "  --evname     optional        Event Name",
         "  --evnum      optional        Event Number",
         "  --timeout    optional        Timeout in seconds, 60 by default",
-        "  --verbose    optional        Switch to Verbose mode",
+        "  --verbose    optional        Set verbosity level",
+        "                               0 - silent, 4 - errs + warnings, 7 - most verbose",
+        "                               4 by default",
         NULL
     };
     int iline;
@@ -364,6 +368,10 @@ int main(int argc, char *argv[])
             popts.verbose = atol(optarg);
             break;
         }
+    }
+    if (argc <= 2) {
+        show_help();
+        return -1;
     }
     if (!conn_host || !conn_port) {
         vtk_loge("--host and --port options are mandatory. Please check documentation");
