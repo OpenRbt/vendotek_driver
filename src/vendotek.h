@@ -90,7 +90,7 @@ typedef enum vtk_net_e {
 #define VTK_NET_IS_ESTABLISHED(state)  (state == VTK_NET_CONNECTED || state == VTK_NET_ACCEPTED)
 
 char     *vtk_net_stringify(vtk_net_t vtk_net);
-int       vtk_net_set(vtk_t *vtk, vtk_net_t net_to, char *addr, char *port);
+int       vtk_net_set(vtk_t *vtk, vtk_net_t net_to, int tm, char *addr, char *port);
 vtk_net_t vtk_net_get_state(vtk_t *vtk);
 int       vtk_net_get_socket(vtk_t *vtk);
 int       vtk_net_send(vtk_t *vtk, vtk_msg_t *msg);

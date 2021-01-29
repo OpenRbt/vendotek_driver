@@ -3,6 +3,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -78,7 +79,7 @@ int vtk_init(vtk_t **vtk)
 
 void vtk_free(vtk_t *vtk){
     if (! VTK_NET_IS_DOWN(vtk->net_state)) {
-        vtk_net_set(vtk, VTK_NET_DOWN, NULL, NULL);
+        vtk_net_set(vtk, VTK_NET_DOWN, 0, NULL, NULL);
     }
     if (vtk->sock_conn.fd >= 0) {
         close(vtk->sock_conn.fd);
@@ -425,7 +426,7 @@ char *vtk_net_stringify(vtk_net_t vtk_net)
     }
 }
 
-int vtk_net_set(vtk_t *vtk, vtk_net_t net_to, char *addr, char *port)
+int vtk_net_set(vtk_t *vtk, vtk_net_t net_to, int tm, char *addr, char *port)
 {
     if (VTK_NET_IS_DOWN(vtk->net_state) && VTK_NET_IS_LISTEN(net_to)) {
         /*
@@ -435,8 +436,7 @@ int vtk_net_set(vtk_t *vtk, vtk_net_t net_to, char *addr, char *port)
 
         lsock->fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
         if (lsock->fd < 0) {
-            vtk_loge("%s -> %s: %s", vtk_net_stringify(vtk->net_state), vtk_net_stringify(net_to),
-                     "Can't create listen socket");
+            vtk_loge("%s", "Can't create listen socket");
             return -1;
         }
         int sockoption = 1;
@@ -445,22 +445,19 @@ int vtk_net_set(vtk_t *vtk, vtk_net_t net_to, char *addr, char *port)
         lsock->addr.sin_family = AF_INET;
         lsock->addr.sin_port   = htons(atoi(port));
         if (inet_aton(addr, &lsock->addr.sin_addr) == 0) {
-            vtk_loge("%s -> %s: %s %s", vtk_net_stringify(vtk->net_state), vtk_net_stringify(net_to),
-                     "Bad listen addr: ", addr);
+            vtk_loge("%s %s", "Bad listen addr:", addr);
             close(lsock->fd);
             lsock->fd = -1;
             return -1;
         }
         if (bind(lsock->fd, (struct sockaddr *)&lsock->addr, sizeof(lsock->addr)) < 0) {
-            vtk_loge("%s -> %s: %s %s", vtk_net_stringify(vtk->net_state), vtk_net_stringify(net_to),
-                     "Listen socket binding error: ", strerror(errno));
+            vtk_loge("%s %s", "Listen socket binding error:", strerror(errno));
             close(lsock->fd);
             lsock->fd = -1;
             return -1;
         }
         if (listen(lsock->fd, INT32_MAX) < 0) {
-            vtk_loge("%s -> %s: %s %s", vtk_net_stringify(vtk->net_state), vtk_net_stringify(net_to),
-                     "Listen socket error: ", strerror(errno));
+            vtk_loge("%s %s", "Listen socket error:", strerror(errno));
             close(lsock->fd);
             lsock->fd = -1;
             return -1;
@@ -480,11 +477,11 @@ int vtk_net_set(vtk_t *vtk, vtk_net_t net_to, char *addr, char *port)
 
         asock->fd = accept(lsock->fd, (struct sockaddr *)&asock->addr, &asize);
         if (asock->fd < 0) {
-            vtk_loge("%s -> %s: %s %s", vtk_net_stringify(vtk->net_state), vtk_net_stringify(net_to),
-                     "Can't accept incoming connection: ", strerror(errno));
+            vtk_loge("%s %s", "Can't accept incoming connection:", strerror(errno));
             return -1;
         }
-        fcntl(asock->fd, F_SETFL, O_NONBLOCK);
+        long fdflags = (fdflags = fcntl(asock->fd, F_GETFL, NULL)) < 0 ? 0 : fdflags;
+        fcntl(asock->fd, F_SETFL, fdflags | O_NONBLOCK);
 
         vtk->net_state = net_to;
         vtk_logi("Client connected from %s:%u",
@@ -551,36 +548,57 @@ int vtk_net_set(vtk_t *vtk, vtk_net_t net_to, char *addr, char *port)
 
         csock->fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
         if (csock->fd < 0) {
-            vtk_loge("%s -> %s: %s", vtk_net_stringify(vtk->net_state), vtk_net_stringify(net_to),
-                     "Can't create connect socket");
+            vtk_loge("%s", "Can't create connect socket");
             return -1;
         }
-        int sockoption = 1;
-        setsockopt(csock->fd, SOL_SOCKET, SO_REUSEADDR, &sockoption, sizeof(sockoption));
+        int       sockopt = 1;
+        socklen_t socksize = sizeof(sockopt);
+        setsockopt(csock->fd, SOL_SOCKET, SO_REUSEADDR, &sockopt, socksize);
+
+        long fdflags = (fdflags = fcntl(csock->fd, F_GETFL, NULL)) < 0 ? 0 : fdflags;
+        fcntl(csock->fd, F_SETFL, fdflags | O_NONBLOCK);
 
         csock->addr.sin_family = AF_INET;
         csock->addr.sin_port   = htons(atoi(port));
         if (inet_aton(addr, &csock->addr.sin_addr) == 0) {
-            vtk_loge("%s -> %s: %s %s", vtk_net_stringify(vtk->net_state), vtk_net_stringify(net_to),
-                     "Bad connect addr: ", addr);
+            vtk_loge("%s %s", "Bad connection addr:", addr);
             close(csock->fd);
             csock->fd = -1;
             return -1;
         }
-        if (connect(csock->fd, (struct sockaddr *)&csock->addr, sizeof(csock->addr)) < 0) {
-            vtk_loge("%s -> %s: Can't connect to %s:%u: %s",
-                      vtk_net_stringify(vtk->net_state), vtk_net_stringify(net_to),
+        int rconn = connect(csock->fd, (struct sockaddr *)&csock->addr, sizeof(csock->addr));
+        if ((rconn >= 0) || (errno != EINPROGRESS)) {
+            vtk_loge("%s %s:%u (%s)", "Can't connect to: ",
                       inet_ntoa(csock->addr.sin_addr), ntohs(csock->addr.sin_port), strerror(errno));
             close(csock->fd);
             csock->fd = -1;
             return -1;
         }
-        fcntl(csock->fd, F_SETFL, O_NONBLOCK);
+        struct pollfd pollfd = {
+            .fd     = csock->fd,
+            .events = POLLOUT
+        };
+        int rpoll = poll(&pollfd, 1, tm);
+        if (rpoll == 0) {
+            vtk_loge("%s %s:%u", "Connection timeout. Endpoint:",
+                      inet_ntoa(csock->addr.sin_addr), ntohs(csock->addr.sin_port));
+            close(csock->fd);
+            csock->fd = -1;
+            return -1;
+        } else if ((rpoll < 0) ||
+                   (getsockopt(csock->fd, SOL_SOCKET, SO_ERROR, &sockopt, &socksize) < 0) ||
+                   (sockopt != 0)
+                  ) {
+            vtk_loge("%s %s:%u", "Can't connect to:",
+                      inet_ntoa(csock->addr.sin_addr), ntohs(csock->addr.sin_port));
+            close(csock->fd);
+            csock->fd = -1;
+            return -1;
+        }
 
         vtk->net_state = net_to;
         vtk_logi("Connected to %s:%u", inet_ntoa(csock->addr.sin_addr), ntohs(csock->addr.sin_port));
         return 0;
-
     }
 
     if (VTK_NET_IS_CONNECTED(vtk->net_state) && VTK_NET_IS_DOWN(net_to)) {
