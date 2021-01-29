@@ -125,6 +125,7 @@ typedef struct payment_opts_s {
     vtk_t     *vtk;
     vtk_msg_t *mreq;
     vtk_msg_t *mresp;
+    int        ping;
     int        timeout;
     int        verbose;
 
@@ -157,39 +158,38 @@ int do_payment(payment_opts_t *opts)
         .price     = opts->price,
         .timeout   = opts->timeout
     };
+    int rc_idl = 0, rc_vrp = 0, rc_fin = 0;
 
     /*
-     * 1 stage, IDL
+     * 1 stage, IDL 1
      */
     vtk_logi("IDL stage");
 
     stage_opts_t stopts = {
         .vtk     = opts->vtk,
         .timeout = opts->timeout * 1000,
-        .verbose = opts->verbose
+        .verbose = opts->verbose,
+        .mreq    = opts->mreq,
+        .mresp   = opts->mresp
     };
-    vtk_msg_init(&stopts.mreq,  stopts.vtk);
-    vtk_msg_init(&stopts.mresp, stopts.vtk);
-
-    stage_req_t idl_req[] = {
-        {.id = 0x1, .valstr = "IDL"             },
-        {.id = 0x8, .valint =  payment.evname   ? &payment.evnum : NULL  },
-        {.id = 0x7, .valstr =  payment.evname   },
-        {.id = 0x9, .valint =  payment.prodname ? &payment.prodid : NULL },
-        {.id = 0xf, .valstr =  payment.prodname },
-        {.id = 0x4, .valint = &payment.price    },
-        { 0 }
-    };
-    stage_resp_t idl_resp[] = {
-        {.id = 0x1, .expstr = "IDL" },
-        {.id = 0x3, .valint = &payment.opnum    },
-        {.id = 0x6, .valint = &payment.timeout  },
-        {.id = 0x8, .valint = &payment.evnum    },
-        { 0 }
-    };
-
-    if (do_stage(&stopts, idl_req, idl_resp) < 0) {
-        return -1;
+    if (1) {
+        stage_req_t idl1_req[] = {
+            {.id = 0x1, .valstr = "IDL"             },
+            {.id = 0x8, .valint =  payment.evname   ? &payment.evnum : NULL  },
+            {.id = 0x7, .valstr =  payment.evname   },
+            {.id = 0x9, .valint =  payment.prodname ? &payment.prodid : NULL },
+            {.id = 0xf, .valstr =  payment.prodname },
+            {.id = 0x4, .valint = &payment.price    },
+            { 0 }
+        };
+        stage_resp_t idl1_resp[] = {
+            {.id = 0x1, .expstr = "IDL"             },
+            {.id = 0x3, .valint = &payment.opnum    },
+            {.id = 0x6, .valint = &payment.timeout  },
+            {.id = 0x8, .valint = &payment.evnum    },
+            { 0 }
+        };
+        rc_idl = do_stage(&stopts, idl1_req, idl1_resp) >= 0;
     }
 
     /*
@@ -197,25 +197,25 @@ int do_payment(payment_opts_t *opts)
      */
     vtk_logi("VRP stage");
 
-    stopts.timeout = payment.timeout * 1000;
-    payment.opnum++;
+    if (rc_idl) {
+        stopts.timeout = payment.timeout * 1000;
+        payment.opnum++;
 
-    stage_req_t vrp_req[] = {
-        {.id = 0x1, .valstr = "VRP"             },
-        {.id = 0x3, .valint = &payment.opnum    },
-        {.id = 0x9, .valint =  payment.prodname ? &payment.prodid : NULL },
-        {.id = 0xf, .valstr =  payment.prodname },
-        {.id = 0x4, .valint = &payment.price    },
-        { 0 }
-    };
-    stage_resp_t vrp_resp[] = {
-        {.id = 0x1, .expstr = "VRP" },
-        {.id = 0x3, .expint = &payment.opnum    },
-        {.id = 0x4, .expint = &payment.price    },
-        { 0 }
-    };
-    if (do_stage(&stopts, vrp_req, vrp_resp) < 0) {
-        return -1;
+        stage_req_t vrp_req[] = {
+            {.id = 0x1, .valstr = "VRP"             },
+            {.id = 0x3, .valint = &payment.opnum    },
+            {.id = 0x9, .valint =  payment.prodname ? &payment.prodid : NULL },
+            {.id = 0xf, .valstr =  payment.prodname },
+            {.id = 0x4, .valint = &payment.price    },
+            { 0 }
+        };
+        stage_resp_t vrp_resp[] = {
+            {.id = 0x1, .expstr = "VRP" },
+            {.id = 0x3, .expint = &payment.opnum    },
+            {.id = 0x4, .expint = &payment.price    },
+            { 0 }
+        };
+        rc_vrp = do_stage(&stopts, vrp_req, vrp_resp) >= 0;
     }
 
     /*
@@ -223,35 +223,71 @@ int do_payment(payment_opts_t *opts)
      */
     vtk_logi("FIN stage");
 
-    stopts.allow_eof = 1;
+    if (rc_vrp) {
+        stopts.allow_eof = 1;
 
-    stage_req_t fin_req[] = {
-        {.id = 0x1, .valstr = "FIN"             },
-        {.id = 0x3, .valint = &payment.opnum    },
-        {.id = 0x9, .valint =  payment.prodname ? &payment.prodid : NULL },
-        {.id = 0x4, .valint = &payment.price    },
-        { 0 }
-    };
-    stage_resp_t fin_resp[] = {
-        {.id = 0x1, .expstr = "FIN" },
-        {.id = 0x3, .expint = &payment.opnum },
-        {.id = 0x4, .expint = &payment.price },
-        { 0 }
-    };
-    if (do_stage(&stopts, fin_req, fin_resp) < 0) {
-        return -1;
+        stage_req_t fin_req[] = {
+            {.id = 0x1, .valstr = "FIN"             },
+            {.id = 0x3, .valint = &payment.opnum    },
+            {.id = 0x9, .valint =  payment.prodname ? &payment.prodid : NULL },
+            {.id = 0x4, .valint = &payment.price    },
+            { 0 }
+        };
+        stage_resp_t fin_resp[] = {
+            {.id = 0x1, .expstr = "FIN" },
+            {.id = 0x3, .expint = &payment.opnum },
+            {.id = 0x4, .expint = &payment.price },
+            { 0 }
+        };
+        rc_fin = do_stage(&stopts, fin_req, fin_resp) >= 0;
     }
 
-    return 0;
+    /*
+     * 4 stage, IDL 2, always
+     */
+    stage_req_t idl2_req[] = {
+        {.id = 0x1, .valstr = "IDL"             },
+        { 0 }
+    };
+    stage_resp_t idl2_resp[] = {
+        {.id = 0x1, .expstr = "IDL"             },
+        { 0 }
+    };
+    do_stage(&stopts, idl2_req, idl2_resp);
+
+    return ! (rc_idl && rc_vrp && rc_fin) ? -1 : 0;
 }
 
+int do_ping(payment_opts_t *opts)
+{
+    stage_opts_t stopts = {
+        .vtk     = opts->vtk,
+        .timeout = opts->timeout * 1000,
+        .verbose = opts->verbose,
+        .mreq    = opts->mreq,
+        .mresp   = opts->mresp
+    };
+    stage_req_t idl_req[] = {
+        {.id = 0x1, .valstr = "IDL"             },
+        { 0 }
+    };
+    stage_resp_t idl_resp[] = {
+        {.id = 0x1, .expstr = "IDL"             },
+        { 0 }
+    };
+    if (do_stage(&stopts, idl_req, idl_resp) < 0) {
+        return -1;
+    }
+    return 0;
+}
 
 void show_help(void) {
     const char *help[] = {
         "Available options are:",
         "  --host       mandatory       POS hostname IP",
         "  --port       mandatory       POS port number",
-        "  --price      mandatory       Price in minor currency units (MCU)",
+        "  --price      optional        Price in minor currency units (MCU)",
+        "  --ping       optional        Connect, send IDL message, disconnect",
         "  --prodname   optional        Product Name",
         "  --prodid     optional        Product ID",
         "  --evname     optional        Event Name",
@@ -274,6 +310,7 @@ int main(int argc, char *argv[])
      */
     payment_opts_t popts = {
         .timeout   = 60,
+        .verbose   = LOG_WARNING
     };
     char *conn_host = NULL, *conn_port = NULL;
 
@@ -286,8 +323,9 @@ int main(int argc, char *argv[])
         {"prodid",    required_argument, NULL, 'I'},
         {"evname",    required_argument, NULL, 'e'},
         {"evnum",     required_argument, NULL, 'E'},
+        {"ping",      optional_argument, NULL, 'i'},
         {"timeout",   required_argument, NULL, 't'},
-        {"verbose",   no_argument,       NULL, 'v'},
+        {"verbose",   required_argument, NULL, 'v'},
         {NULL,        0,                 NULL,  0 }
     };
     int longind = -1;
@@ -316,33 +354,43 @@ int main(int argc, char *argv[])
         case 'E':
             popts.evnum = atol(optarg);
             break;
+        case 'i':
+            popts.ping = 1;
+            break;
         case 't':
             popts.timeout = atol(optarg);
             break;
         case 'v':
-            popts.verbose = 1;
+            popts.verbose = atol(optarg);
             break;
         }
     }
-    if (!conn_host || !conn_port || !popts.price ) {
-        show_help();
+    if (!conn_host || !conn_port) {
+        vtk_loge("--host and --port options are mandatory. Please check documentation");
         return -1;
     }
-
+    if ((!popts.price && !popts.ping) || (popts.price && popts.ping)) {
+        vtk_loge("one of --price or --ping option should be set. Please check documentation");
+        return -1;
+    }
     /*
      * Initialize VTK & do payment
      */
-    vtk_logline_set(NULL, popts.verbose ? LOG_DEBUG : LOG_WARNING);
+    int rcode = 0;
+
+    vtk_logline_set(NULL, popts.verbose);
     vtk_init(&popts.vtk);
-    vtk_net_set(popts.vtk, VTK_NET_CONNECTED, conn_host, conn_port);
+    rcode = vtk_net_set(popts.vtk, VTK_NET_CONNECTED, popts.timeout * 1000, conn_host, conn_port);
 
-    vtk_msg_init(&popts.mreq,  popts.vtk);
-    vtk_msg_init(&popts.mresp, popts.vtk);
+    if (rcode >= 0) {
+        vtk_msg_init(&popts.mreq,  popts.vtk);
+        vtk_msg_init(&popts.mresp, popts.vtk);
 
-    int rcode = do_payment(&popts);
+        rcode = popts.ping ? do_ping(&popts) : do_payment(&popts);
 
-    vtk_msg_free(popts.mreq);
-    vtk_msg_free(popts.mresp);
+        vtk_msg_free(popts.mreq);
+        vtk_msg_free(popts.mresp);
+    }
     vtk_free(popts.vtk);
 
     return rcode < 0 ? 1 : 0;
