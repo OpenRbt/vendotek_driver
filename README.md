@@ -52,7 +52,7 @@ Example 1. Do payment of 25000 MCU (250 Rubles)
 $ ./vendotek-cli --host 127.0.0.1 --port 1234 --price 25000
 ```
 
-Example 2. Do payment of 35000 MCU (350 Rubles), silent mode
+Example 2. Do payment of 25000 MCU (250 Rubles), silent mode
 ```
 $ ./vendotek-cli --host 127.0.0.1 --port 1234 --price 25000 --verbose 0
 ```
