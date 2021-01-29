@@ -77,7 +77,7 @@ int user_action_ctrl(state_t *state, char *action)
                 vtk_loge(errmsg);
                 return -1;
             }
-            return vtk_net_set(state->vtk, VTK_NET_CONNECTED, args[2], args[3]);
+            return vtk_net_set(state->vtk, VTK_NET_CONNECTED, 0, args[2], args[3]);
         }
 
         if (args[1] && (strcasecmp(args[1], "list") == 0)) {
@@ -85,18 +85,18 @@ int user_action_ctrl(state_t *state, char *action)
                 vtk_loge(errmsg);
                 return -1;
             }
-            return vtk_net_set(state->vtk, VTK_NET_LISTENED, args[2], args[3]);
+            return vtk_net_set(state->vtk, VTK_NET_LISTENED, 0, args[2], args[3]);
         }
 
         if (args[1] && (strcasecmp(args[1], "drop") == 0)) {
             if (VTK_NET_IS_ACCEPTED(vtk_net_get_state(state->vtk))) {
-                return vtk_net_set(state->vtk, VTK_NET_LISTENED, NULL, NULL);
+                return vtk_net_set(state->vtk, VTK_NET_LISTENED, 0, NULL, NULL);
             } else {
-                return vtk_net_set(state->vtk, VTK_NET_DOWN, NULL, NULL);
+                return vtk_net_set(state->vtk, VTK_NET_DOWN, 0, NULL, NULL);
             }
         }
         if (args[1] && (strcasecmp(args[1], "down") == 0)) {
-            return vtk_net_set(state->vtk, VTK_NET_DOWN, NULL, NULL);
+            return vtk_net_set(state->vtk, VTK_NET_DOWN, 0, NULL, NULL);
         }
         if (args[1] && (strcasecmp(args[1], "stat") == 0)) {
             vtk_logi("current state: %s", vtk_net_stringify(vtk_net_get_state(state->vtk)));
@@ -247,7 +247,7 @@ int main_loop_run(state_t *state)
             /* network socket was triggered */
 
             if (VTK_NET_IS_LISTEN(vtk_net_get_state(state->vtk))) {
-                vtk_net_set(state->vtk, VTK_NET_ACCEPTED, NULL, NULL);
+                vtk_net_set(state->vtk, VTK_NET_ACCEPTED, 0, NULL, NULL);
                 continue;
             }
 
@@ -264,7 +264,7 @@ int main_loop_run(state_t *state)
                 if (fleof) {
                     vtk_net_t nstate = vtk_net_get_state(state->vtk);
                     vtk_logi("EOF was found on %s socket. Close it", vtk_net_stringify(nstate));
-                    vtk_net_set(state->vtk, VTK_NET_IS_CONNECTED(nstate) ? VTK_NET_DOWN : VTK_NET_LISTENED, NULL, NULL);
+                    vtk_net_set(state->vtk, VTK_NET_IS_CONNECTED(nstate) ? VTK_NET_DOWN : VTK_NET_LISTENED, 0, NULL, NULL);
                 }
             }
         }
