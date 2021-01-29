@@ -1,6 +1,6 @@
 ## Vendotek driver
 
-This project provide Vendotek protocol (VTK) implementation, and provide basic interaction between
+This project provide Vendotek protocol (VTK) implementation, that allow do basic interaction between
 Vendotek POS terminal and Vending Machine Controller (VMC)
 
 #### Repository structure
@@ -42,22 +42,22 @@ There are several command line options for the client app:
 
 Example 1. Do payment of 35000 MCU (350 Rubles)
 ```
-$ ./vendotek-cli —host 192.168.1.51 —port 62801 —price 35000
+$ ./vendotek-cli --host 192.168.1.51 --port 62801 --price 35000
 ```
 
 Example 2. Do payment of 35000 MCU (350 Rubles), verbose mode
 ```
-$ ./vendotek-cli —host 192.168.1.51 —port 62801 —price 35000 --verbose
+$ ./vendotek-cli --host 192.168.1.51 --port 62801 --price 35000 --verbose
 ```
 
 Example 3. The same as in above. Add product name & product id
 ```
-$ ./vendotek-cli —host 192.168.1.51 —port 62801 —price 35000 --prodname "CARWASH" --prodid 7 --verbose
+$ ./vendotek-cli --host 192.168.1.51 --port 62801 --price 35000 --prodname "CARWASH" --prodid 7 --verbose
 ```
 
 Example 4. The same as in above. Add POS event name and event number
 ```
-$ ./vendotek-cli —host 192.168.1.51 —port 62801 —price 35000 --prodname "CARWASH" --prodid 7 --evname "CSAPP" --evnumber 10 --verbose
+$ ./vendotek-cli --host 192.168.1.51 --port 62801 --price 35000 --prodname "CARWASH" --prodid 7 --evname "CSAPP" --evnumber 10 --verbose
 ```
 
 __Note!__ VMC must check `vendotek-cli` return code. E.g:
