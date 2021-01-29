@@ -286,6 +286,7 @@ int main(int argc, char *argv[])
         {"prodid",    required_argument, NULL, 'I'},
         {"evname",    required_argument, NULL, 'e'},
         {"evnum",     required_argument, NULL, 'E'},
+        {"timeout",   required_argument, NULL, 't'},
         {"verbose",   no_argument,       NULL, 'v'},
         {NULL,        0,                 NULL,  0 }
     };
